@@ -1,0 +1,391 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1"/>
+  <title>SmartMove Ops Console</title>
+
+  <style>
+    :root{
+      --bg: #0b1220;
+      --card: rgba(255,255,255,.06);
+      --card2: rgba(255,255,255,.08);
+      --text: rgba(255,255,255,.92);
+      --muted: rgba(255,255,255,.65);
+      --line: rgba(255,255,255,.12);
+      --good:#22c55e;
+      --warn:#f59e0b;
+      --bad:#ef4444;
+      --brand:#60a5fa;
+      --brand2:#a78bfa;
+      --shadow: 0 20px 60px rgba(0,0,0,.35);
+      --radius: 18px;
+      --mono: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+      --sans: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial, "Apple Color Emoji","Segoe UI Emoji";
+    }
+
+    *{box-sizing:border-box}
+    html,body{height:100%}
+    body{
+      margin:0;
+      font-family:var(--sans);
+      color:var(--text);
+      background:
+        radial-gradient(1200px 600px at 10% -10%, rgba(96,165,250,.35), transparent 55%),
+        radial-gradient(1000px 600px at 110% 10%, rgba(167,139,250,.28), transparent 55%),
+        radial-gradient(900px 500px at 50% 110%, rgba(34,197,94,.20), transparent 55%),
+        var(--bg);
+    }
+
+    .wrap{max-width:1200px;margin:0 auto;padding:26px}
+    header{display:flex;align-items:center;justify-content:space-between;gap:16px;margin-bottom:20px}
+    .brand{
+      display:flex;align-items:center;gap:14px
+    }
+    .logo{
+      width:44px;height:44px;border-radius:14px;
+      background: linear-gradient(135deg, var(--brand), var(--brand2));
+      box-shadow: 0 12px 30px rgba(96,165,250,.25);
+      position:relative; overflow:hidden;
+    }
+    .logo:after{
+      content:""; position:absolute; inset:-30px;
+      background: radial-gradient(circle at 40% 30%, rgba(255,255,255,.35), transparent 45%);
+      transform: rotate(18deg);
+    }
+    h1{font-size:18px;letter-spacing:.4px;margin:0}
+    .subtitle{font-size:13px;color:var(--muted);margin-top:2px}
+    .pill{
+      display:inline-flex;align-items:center;gap:8px;
+      padding:10px 12px;border-radius:999px;
+      background: rgba(255,255,255,.06);
+      border:1px solid var(--line);
+      box-shadow: 0 10px 30px rgba(0,0,0,.18);
+    }
+    .dot{width:10px;height:10px;border-radius:999px;background:var(--warn);box-shadow:0 0 0 6px rgba(245,158,11,.15)}
+    .dot.ok{background:var(--good);box-shadow:0 0 0 6px rgba(34,197,94,.15)}
+    .dot.bad{background:var(--bad);box-shadow:0 0 0 6px rgba(239,68,68,.15)}
+    .mono{font-family:var(--mono)}
+    .row{display:grid;grid-template-columns:1.6fr .9fr;gap:18px}
+    @media(max-width:980px){.row{grid-template-columns:1fr}}
+    .card{
+      background: var(--card);
+      border: 1px solid var(--line);
+      border-radius: var(--radius);
+      box-shadow: var(--shadow);
+      overflow:hidden;
+    }
+    .card .hd{
+      padding:16px 16px 12px 16px;
+      border-bottom:1px solid var(--line);
+      display:flex;align-items:center;justify-content:space-between;gap:10px;
+    }
+    .card .hd h2{margin:0;font-size:14px;letter-spacing:.35px}
+    .card .bd{padding:16px}
+    .grid2{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+    @media(max-width:620px){.grid2{grid-template-columns:1fr}}
+    label{display:block;font-size:12px;color:var(--muted);margin:0 0 6px}
+    input,select,textarea{
+      width:100%;
+      padding:11px 12px;
+      border-radius:12px;
+      border:1px solid rgba(255,255,255,.14);
+      background: rgba(8,12,20,.55);
+      color:var(--text);
+      outline:none;
+    }
+    input:focus,select:focus,textarea:focus{
+      border-color: rgba(96,165,250,.55);
+      box-shadow: 0 0 0 4px rgba(96,165,250,.12);
+    }
+    .btns{display:flex;gap:10px;flex-wrap:wrap}
+    button{
+      border:0; cursor:pointer;
+      padding:10px 12px;border-radius:12px;
+      font-weight:600;
+      background: rgba(255,255,255,.10);
+      color:var(--text);
+      border:1px solid rgba(255,255,255,.14);
+      transition: transform .05s ease, background .2s ease, border-color .2s ease;
+    }
+    button:hover{background: rgba(255,255,255,.14); border-color: rgba(255,255,255,.22)}
+    button:active{transform: translateY(1px)}
+    button.primary{
+      background: linear-gradient(135deg, rgba(96,165,250,.95), rgba(167,139,250,.95));
+      border-color: transparent;
+    }
+    button.primary:hover{filter: brightness(1.05)}
+    button.danger{background: rgba(239,68,68,.16); border-color: rgba(239,68,68,.30)}
+    button.good{background: rgba(34,197,94,.16); border-color: rgba(34,197,94,.30)}
+    .small{font-size:12px;color:var(--muted)}
+    .tabs{display:flex;gap:8px;flex-wrap:wrap}
+    .tab{
+      padding:9px 10px;border-radius:12px;
+      background: rgba(255,255,255,.06);
+      border:1px solid var(--line);
+      font-size:12px; color:var(--muted);
+    }
+    .tab.active{
+      color:var(--text);
+      border-color: rgba(96,165,250,.45);
+      background: rgba(96,165,250,.10);
+    }
+    .kv{display:grid;grid-template-columns:140px 1fr;gap:8px 12px;font-size:13px}
+    .kv div{padding:6px 0;border-bottom:1px dashed rgba(255,255,255,.12)}
+    .badge{
+      display:inline-flex;align-items:center;gap:8px;
+      padding:7px 10px;border-radius:999px;font-size:12px;
+      border:1px solid rgba(255,255,255,.14);
+      background: rgba(255,255,255,.06);
+    }
+    .b-good{border-color:rgba(34,197,94,.35); background: rgba(34,197,94,.10)}
+    .b-warn{border-color:rgba(245,158,11,.35); background: rgba(245,158,11,.10)}
+    .b-bad{border-color:rgba(239,68,68,.35); background: rgba(239,68,68,.10)}
+    .muted{color:var(--muted)}
+    .split{display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap}
+    .list{
+      display:flex;flex-direction:column;gap:8px
+    }
+    .item{
+      padding:10px 12px;border-radius:14px;
+      background: rgba(255,255,255,.06);
+      border:1px solid rgba(255,255,255,.10);
+      display:flex;align-items:center;justify-content:space-between;gap:10px
+    }
+    .item .id{font-family:var(--mono);font-size:12px;opacity:.95}
+    .item button{padding:7px 10px;border-radius:10px;font-size:12px}
+    .toast-wrap{position:fixed; right:18px; bottom:18px; display:flex; flex-direction:column; gap:10px; z-index:9999}
+    .toast{
+      width:min(420px, calc(100vw - 36px));
+      padding:12px 12px;border-radius:14px;
+      background: rgba(12,16,26,.92);
+      border:1px solid rgba(255,255,255,.12);
+      box-shadow: 0 18px 50px rgba(0,0,0,.45);
+      display:flex; gap:10px; align-items:flex-start;
+      animation: pop .2s ease;
+    }
+    @keyframes pop{from{transform: translateY(6px); opacity:.6}to{transform:none;opacity:1}}
+    .toast .bar{
+      width:10px;height:10px;border-radius:999px;margin-top:4px;
+      background: var(--brand);
+      box-shadow: 0 0 0 6px rgba(96,165,250,.12);
+      flex:0 0 auto;
+    }
+    .toast.good .bar{background:var(--good);box-shadow:0 0 0 6px rgba(34,197,94,.12)}
+    .toast.bad .bar{background:var(--bad);box-shadow:0 0 0 6px rgba(239,68,68,.12)}
+    .toast .t{font-weight:700;font-size:13px;margin:0}
+    .toast .m{font-size:12px;color:var(--muted);margin:3px 0 0}
+    .hr{height:1px;background:rgba(255,255,255,.10);margin:14px 0}
+    .slider{
+      display:grid; grid-template-columns: 1fr auto; gap:10px; align-items:center;
+    }
+    input[type="range"]{width:100%}
+  </style>
+</head>
+
+<body>
+  <div class="wrap">
+    <header>
+      <div class="brand">
+        <div class="logo"></div>
+        <div>
+          <h1>SmartMove Ops Console</h1>
+          <div class="subtitle">A clean web tester for your core engine + API wrapper</div>
+        </div>
+      </div>
+
+      <div class="pill" title="API health check">
+        <div id="apiDot" class="dot"></div>
+        <div>
+          <div style="font-size:12px;color:var(--muted);line-height:1;">API</div>
+          <div class="mono" id="apiUrl" style="font-size:12px;">http://localhost:8080</div>
+        </div>
+      </div>
+    </header>
+
+    <div class="row">
+      <!-- LEFT: Operations -->
+      <div class="card">
+        <div class="hd">
+          <h2>Operations</h2>
+          <div class="tabs" id="tabs">
+            <div class="tab active" data-tab="register">Register</div>
+            <div class="tab" data-tab="actions">Actions</div>
+            <div class="tab" data-tab="telemetry">Telemetry</div>
+          </div>
+        </div>
+
+        <div class="bd">
+          <!-- Register -->
+          <section class="pane" id="pane-register">
+            <div class="grid2">
+              <div>
+                <label>Vehicle Type</label>
+                <select id="regType">
+                  <option value="BICYCLE">BICYCLE</option>
+                  <option value="E_SCOOTER">E_SCOOTER</option>
+                  <option value="MOPED">MOPED</option>
+                </select>
+              </div>
+              <div>
+                <label>City</label>
+                <select id="regCity">
+                  <option value="LONDON">LONDON</option>
+                  <option value="MILAN">MILAN</option>
+                  <option value="ROME">ROME</option>
+                </select>
+              </div>
+            </div>
+
+            <div class="hr"></div>
+
+            <div class="split">
+              <div class="small">Creates a new vehicle in your core engine and stores it in <span class="mono">data/vehicles.json</span>.</div>
+              <button class="primary" id="btnRegister">Register Vehicle</button>
+            </div>
+          </section>
+
+          <!-- Actions -->
+          <section class="pane" id="pane-actions" style="display:none;">
+            <div class="grid2">
+              <div>
+                <label>Vehicle ID</label>
+                <input id="vehicleId" class="mono" placeholder="Paste a vehicle id"/>
+              </div>
+              <div>
+                <label>City (for actions)</label>
+                <select id="actionCity">
+                  <option value="LONDON">LONDON</option>
+                  <option value="MILAN">MILAN</option>
+                  <option value="ROME">ROME</option>
+                </select>
+              </div>
+            </div>
+
+            <div style="margin-top:12px" class="btns">
+              <button id="btnFetch">Get Vehicle</button>
+              <button class="good" id="btnReserve">Reserve</button>
+              <button class="primary" id="btnStart">Start Rental</button>
+              <button class="danger" id="btnEnd">End Rental</button>
+            </div>
+
+            <div class="hr"></div>
+            <div class="small">Tip: click a recent vehicle on the right panel to auto-fill the ID.</div>
+          </section>
+
+          <!-- Telemetry -->
+          <section class="pane" id="pane-telemetry" style="display:none;">
+            <div class="grid2">
+              <div>
+                <label>Vehicle ID</label>
+                <input id="telVehicleId" class="mono" placeholder="Paste a vehicle id"/>
+              </div>
+              <div>
+                <label>Helmet Present (Milan Mopeds)</label>
+                <select id="helmet">
+                  <option value="false">false</option>
+                  <option value="true">true</option>
+                </select>
+              </div>
+            </div>
+
+            <div class="grid2">
+              <div>
+                <label>Hardware Fault</label>
+                <select id="fault">
+                  <option value="false">false</option>
+                  <option value="true">true</option>
+                </select>
+              </div>
+              <div>
+                <label>Movement Detected</label>
+                <select id="movementDetected">
+                  <option value="false">false</option>
+                  <option value="true">true</option>
+                </select>
+              </div>
+            </div>
+
+
+            <div style="margin-top:12px" class="grid2">
+              <div>
+                <label>Latitude</label>
+                <input id="lat" type="number" step="0.0001" value="41.9000"/>
+              </div>
+              <div>
+                <label>Longitude</label>
+                <input id="lon" type="number" step="0.0001" value="12.4900"/>
+              </div>
+            </div>
+
+            <div style="margin-top:12px" class="grid2">
+              <div>
+                <label>Battery %</label>
+                <div class="slider">
+                  <input id="bat" type="range" min="0" max="100" value="80"/>
+                  <div class="badge"><span id="batVal">80</span>%</div>
+                </div>
+              </div>
+              <div>
+                <label>Temperature °C</label>
+                <div class="slider">
+                  <input id="temp" type="range" min="-10" max="90" value="25"/>
+                  <div class="badge"><span id="tempVal">25</span>°C</div>
+                </div>
+              </div>
+            </div>
+
+            <div style="margin-top:12px" class="split">
+              <div class="small">
+                Use <b>Temp &gt; 60°C</b> to trigger <span class="badge b-bad">EMERGENCY_LOCK</span> and
+                <b>Battery &lt; 5%</b> while IN_USE to trigger <span class="badge b-warn">MAINTENANCE</span>.
+              </div>
+              <button class="primary" id="btnTelemetry">Send Telemetry</button>
+            </div>
+          </section>
+        </div>
+      </div>
+
+      <!-- RIGHT: Live View -->
+      <div class="card">
+        <div class="hd">
+          <h2>Live Vehicle View</h2>
+          <div class="small muted" id="refreshHint">Auto-refresh: OFF</div>
+        </div>
+
+        <div class="bd">
+          <div class="split">
+            <div class="badge" id="stateBadge">State: <span class="mono" id="stateText">—</span></div>
+            <button id="btnAuto">Enable Auto-Refresh</button>
+          </div>
+
+          <div style="margin-top:12px" class="kv" id="kv">
+            <div class="muted">Vehicle ID</div><div class="mono" id="kvId">—</div>
+            <div class="muted">Type</div><div id="kvType">—</div>
+            <div class="muted">City</div><div id="kvCity">—</div>
+            <div class="muted">Telemetry</div><div class="mono" id="kvTel">—</div>
+          </div>
+
+          <div class="hr"></div>
+
+          <div class="split">
+            <h2 style="margin:0;font-size:14px">Recent Vehicles</h2>
+            <button id="btnClear">Clear</button>
+          </div>
+
+          <div style="margin-top:10px" class="list" id="recentList"></div>
+
+          <div class="hr"></div>
+          <div class="small muted">
+            If the UI can’t reach the API, check that <span class="mono">smartmove-api</span> is running on port <span class="mono">8080</span>.
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="toast-wrap" id="toasts"></div>
+
+  <script src="app.js"></script>
+</body>
+</html>
