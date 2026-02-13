@@ -1,5 +1,9 @@
 package com.smartmove.storage;
 
-public class PaymentStorage {
-    
+import com.smartmove.domain.Payment;
+import java.util.List;
+
+public interface PaymentStorage {
+    void save(Payment payment);
+    List<Payment> findAll();
 }
