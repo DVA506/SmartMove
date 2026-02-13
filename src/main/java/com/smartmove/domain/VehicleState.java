@@ -1,5 +1,10 @@
 package com.smartmove.domain;
 
-public class VehicleState {
-    
+public enum VehicleState {
+    AVAILABLE,
+    RESERVED,
+    IN_USE,
+    MAINTENANCE,
+    EMERGENCY_LOCK,
+    RELOCATING
 }
