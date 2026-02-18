@@ -1,0 +1,46 @@
+{
+  "ROME": [
+    {
+      "id": "rome-colosseum",
+      "type": "NO_GO",
+      "minLat": 41.8890,
+      "maxLat": 41.8935,
+      "minLon": 12.4900,
+      "maxLon": 12.4960,
+      "vehicleTypes": ["E_SCOOTER"]
+    },
+    {
+      "id": "rome-vatican",
+      "type": "NO_GO",
+      "minLat": 41.9000,
+      "maxLat": 41.9055,
+      "minLon": 12.4450,
+      "maxLon": 12.4600,
+      "vehicleTypes": ["E_SCOOTER"]
+    }
+  ],
+
+  "MILAN": [
+    {
+      "id": "milan-duomo",
+      "type": "SLOW",
+      "minLat": 45.4630,
+      "maxLat": 45.4670,
+      "minLon": 9.1870,
+      "maxLon": 9.1930,
+      "vehicleTypes": ["E_SCOOTER", "BICYCLE", "MOPED"]
+    }
+  ],
+
+  "LONDON": [
+    {
+      "id": "london-westminster",
+      "type": "SLOW",
+      "minLat": 51.4990,
+      "maxLat": 51.5055,
+      "minLon": -0.1270,
+      "maxLon": -0.1150,
+      "vehicleTypes": ["E_SCOOTER"]
+    }
+  ]
+}

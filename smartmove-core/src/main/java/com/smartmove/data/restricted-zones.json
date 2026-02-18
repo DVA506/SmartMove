@@ -1,0 +1,13 @@
+{
+  "ROME": [
+    {
+      "id": "rome_center_1",
+      "type": "RECTANGLE",
+      "minLat": 41.89,
+      "maxLat": 41.91,
+      "minLon": 12.48,
+      "maxLon": 12.50,
+      "vehicleTypes": ["E_SCOOTER"]
+    }
+  ]
+}

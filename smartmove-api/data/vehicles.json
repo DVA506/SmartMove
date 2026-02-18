@@ -1,0 +1,230 @@
+[ {
+  "id" : "20132366-5737-41f0-8aba-58ab7973d716",
+  "type" : "E_SCOOTER",
+  "state" : "EMERGENCY_LOCK",
+  "city" : "ROME",
+  "telemetry" : {
+    "vehicleId" : "20132366-5737-41f0-8aba-58ab7973d716",
+    "latitude" : 41.904,
+    "longitude" : 12.47,
+    "batteryPercent" : 80,
+    "temperatureC" : 25.0,
+    "helmetPresent" : false,
+    "movementDetected" : true,
+    "fault" : false
+  },
+  "rentalActive" : false
+}, {
+  "id" : "1192def5-0471-4590-853e-ae547ab6d3eb",
+  "type" : "MOPED",
+  "state" : "EMERGENCY_LOCK",
+  "city" : "MILAN",
+  "telemetry" : {
+    "vehicleId" : "1192def5-0471-4590-853e-ae547ab6d3eb",
+    "latitude" : 41.9,
+    "longitude" : 12.49,
+    "batteryPercent" : 50,
+    "temperatureC" : 10.0,
+    "helmetPresent" : false,
+    "movementDetected" : true,
+    "fault" : false
+  },
+  "rentalActive" : false
+}, {
+  "id" : "67f6dda1-11c9-4b55-b45d-31e9f6d89544",
+  "type" : "BICYCLE",
+  "state" : "EMERGENCY_LOCK",
+  "city" : "LONDON",
+  "telemetry" : {
+    "vehicleId" : "67f6dda1-11c9-4b55-b45d-31e9f6d89544",
+    "latitude" : 41.9,
+    "longitude" : 12.49,
+    "batteryPercent" : 80,
+    "temperatureC" : 25.0,
+    "helmetPresent" : false,
+    "movementDetected" : true,
+    "fault" : false
+  },
+  "rentalActive" : false
+}, {
+  "id" : "01c76154-1def-4b18-9677-8a1bab10914d",
+  "type" : "MOPED",
+  "state" : "AVAILABLE",
+  "city" : "LONDON",
+  "telemetry" : null,
+  "rentalActive" : false
+}, {
+  "id" : "7214a04a-3699-447f-ba15-6e54cae52d73",
+  "type" : "MOPED",
+  "state" : "AVAILABLE",
+  "city" : "MILAN",
+  "telemetry" : {
+    "vehicleId" : "7214a04a-3699-447f-ba15-6e54cae52d73",
+    "latitude" : 41.9,
+    "longitude" : 12.49,
+    "batteryPercent" : 80,
+    "temperatureC" : 25.0,
+    "helmetPresent" : true,
+    "movementDetected" : true,
+    "fault" : false
+  },
+  "rentalActive" : false
+}, {
+  "id" : "008e2013-96ac-4454-ab2d-737b9300fa3d",
+  "type" : "BICYCLE",
+  "state" : "EMERGENCY_LOCK",
+  "city" : "LONDON",
+  "telemetry" : {
+    "vehicleId" : "008e2013-96ac-4454-ab2d-737b9300fa3d",
+    "latitude" : 41.9,
+    "longitude" : 12.49,
+    "batteryPercent" : 40,
+    "temperatureC" : 29.0,
+    "helmetPresent" : false,
+    "movementDetected" : false,
+    "fault" : false
+  },
+  "rentalActive" : false
+}, {
+  "id" : "36213d6a-9ca9-4af0-8d2d-c279b4ad47bb",
+  "type" : "E_SCOOTER",
+  "state" : "EMERGENCY_LOCK",
+  "city" : "ROME",
+  "telemetry" : {
+    "vehicleId" : "36213d6a-9ca9-4af0-8d2d-c279b4ad47bb",
+    "latitude" : 41.904,
+    "longitude" : 12.45,
+    "batteryPercent" : 80,
+    "temperatureC" : 25.0,
+    "helmetPresent" : false,
+    "movementDetected" : true,
+    "fault" : false
+  },
+  "rentalActive" : false
+}, {
+  "id" : "04d4a23a-36fb-4cba-a38f-4f9da375646a",
+  "type" : "BICYCLE",
+  "state" : "AVAILABLE",
+  "city" : "LONDON",
+  "telemetry" : {
+    "vehicleId" : "04d4a23a-36fb-4cba-a38f-4f9da375646a",
+    "latitude" : 41.904,
+    "longitude" : 12.48,
+    "batteryPercent" : 1,
+    "temperatureC" : 25.0,
+    "helmetPresent" : false,
+    "movementDetected" : true,
+    "fault" : false
+  },
+  "rentalActive" : false
+}, {
+  "id" : "3f5ebd3b-f61d-4578-86bb-996acdf61882",
+  "type" : "MOPED",
+  "state" : "EMERGENCY_LOCK",
+  "city" : "MILAN",
+  "telemetry" : {
+    "vehicleId" : "3f5ebd3b-f61d-4578-86bb-996acdf61882",
+    "latitude" : 41.9,
+    "longitude" : 12.49,
+    "batteryPercent" : 50,
+    "temperatureC" : 10.0,
+    "helmetPresent" : false,
+    "movementDetected" : true,
+    "fault" : true
+  },
+  "rentalActive" : false
+}, {
+  "id" : "8b83ac19-30da-4ff7-9b9a-5c0052d9435e",
+  "type" : "BICYCLE",
+  "state" : "AVAILABLE",
+  "city" : "LONDON",
+  "telemetry" : null,
+  "rentalActive" : false
+}, {
+  "id" : "b0869699-38d5-488f-9c83-88bdb01849f5",
+  "type" : "BICYCLE",
+  "state" : "EMERGENCY_LOCK",
+  "city" : "LONDON",
+  "telemetry" : {
+    "vehicleId" : "b0869699-38d5-488f-9c83-88bdb01849f5",
+    "latitude" : 41.9,
+    "longitude" : 12.49,
+    "batteryPercent" : 80,
+    "temperatureC" : 25.0,
+    "helmetPresent" : false,
+    "movementDetected" : true,
+    "fault" : false
+  },
+  "rentalActive" : false
+}, {
+  "id" : "f501fa6d-b697-47e8-a5bb-d4e6d6fe2f71",
+  "type" : "BICYCLE",
+  "state" : "EMERGENCY_LOCK",
+  "city" : "LONDON",
+  "telemetry" : {
+    "vehicleId" : "f501fa6d-b697-47e8-a5bb-d4e6d6fe2f71",
+    "latitude" : 41.9,
+    "longitude" : 12.49,
+    "batteryPercent" : 50,
+    "temperatureC" : 10.0,
+    "helmetPresent" : false,
+    "movementDetected" : true,
+    "fault" : false
+  },
+  "rentalActive" : false
+}, {
+  "id" : "7e47673c-644f-4755-a8e7-269bd5b4372e",
+  "type" : "MOPED",
+  "state" : "EMERGENCY_LOCK",
+  "city" : "LONDON",
+  "telemetry" : {
+    "vehicleId" : "7e47673c-644f-4755-a8e7-269bd5b4372e",
+    "latitude" : 41.9,
+    "longitude" : 12.49,
+    "batteryPercent" : 40,
+    "temperatureC" : 29.0,
+    "helmetPresent" : false,
+    "movementDetected" : false,
+    "fault" : false
+  },
+  "rentalActive" : false
+}, {
+  "id" : "25bac028-f935-4380-83aa-521f96076853",
+  "type" : "BICYCLE",
+  "state" : "EMERGENCY_LOCK",
+  "city" : "LONDON",
+  "telemetry" : {
+    "vehicleId" : "25bac028-f935-4380-83aa-521f96076853",
+    "latitude" : 41.9,
+    "longitude" : 12.49,
+    "batteryPercent" : 80,
+    "temperatureC" : 25.0,
+    "helmetPresent" : false,
+    "movementDetected" : true,
+    "fault" : true
+  },
+  "rentalActive" : false
+}, {
+  "id" : "cbc23628-a648-4278-8b1f-8c557559d028",
+  "type" : "BICYCLE",
+  "state" : "EMERGENCY_LOCK",
+  "city" : "LONDON",
+  "telemetry" : {
+    "vehicleId" : "cbc23628-a648-4278-8b1f-8c557559d028",
+    "latitude" : 41.9,
+    "longitude" : 12.49,
+    "batteryPercent" : 80,
+    "temperatureC" : 25.0,
+    "helmetPresent" : false,
+    "movementDetected" : true,
+    "fault" : false
+  },
+  "rentalActive" : false
+}, {
+  "id" : "dba8285a-45f6-4f6d-a3da-35b6d962429c",
+  "type" : "BICYCLE",
+  "state" : "AVAILABLE",
+  "city" : "LONDON",
+  "telemetry" : null,
+  "rentalActive" : false
+} ]
