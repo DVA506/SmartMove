@@ -2,42 +2,57 @@ package com.smartmove.controller;
 
 import com.smartmove.audit.AuditLogService;
 import com.smartmove.domain.City;
-import com.smartmove.telemetry.TelemetryData;
+import com.smartmove.domain.Payment;
 import com.smartmove.domain.Vehicle;
 import com.smartmove.domain.VehicleState;
 import com.smartmove.domain.VehicleType;
-import com.smartmove.storage.VehicleStorage;
-import com.smartmove.zones.ZoneService;
-import com.smartmove.domain.Payment;
 import com.smartmove.storage.PaymentStorage;
+import com.smartmove.storage.VehicleStorage;
+import com.smartmove.telemetry.TelemetryData;
+import com.smartmove.zones.ZoneService;
+
 import java.util.logging.Logger;
 
 import java.util.Map;
 import java.util.Optional;
-import java.util.concurrent.*;
+import java.util.concurrent.BlockingQueue;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.LinkedBlockingQueue;
+import java.util.concurrent.TimeUnit;
 import java.util.concurrent.locks.ReentrantLock;
 
 public class SmartMoveCentralController {
 
+    private static final String VEHICLE_NOT_FOUND = "Vehicle not found";
+    private static final String VEHICLE_ID_PREFIX = "vehicleId=";
+    private static final String CITY_PREFIX = ", city=";
+
     private final VehicleStorage storage;
     private final AuditLogService auditLog;
-    private final ZoneService zoneService;
-
     private final PaymentStorage paymentStorage;
 
-    // Manual concurrency management: per-vehicle locks
-    private final Map<String, ReentrantLock> vehicleLocks = new ConcurrentHashMap<>();
+    private final VehicleStateValidator stateValidator;
+    private final TelemetryProcessingService telemetryProcessingService;
 
-    // Telemetry background processing
+    private final Map<String, ReentrantLock> vehicleLocks = new ConcurrentHashMap<>();
     private final BlockingQueue<TelemetryData> telemetryQueue = new LinkedBlockingQueue<>();
     private final ExecutorService telemetryWorker = Executors.newSingleThreadExecutor();
+
     private static final Logger logger = Logger.getLogger(SmartMoveCentralController.class.getName());
 
-    public SmartMoveCentralController(VehicleStorage storage, AuditLogService auditLog, ZoneService zoneService, PaymentStorage paymentStorage) {
+    public SmartMoveCentralController(
+            VehicleStorage storage,
+            AuditLogService auditLog,
+            ZoneService zoneService,
+            PaymentStorage paymentStorage
+    ) {
         this.storage = storage;
         this.auditLog = auditLog;
-        this.zoneService = zoneService;
         this.paymentStorage = paymentStorage;
+        this.stateValidator = new VehicleStateValidator();
+        this.telemetryProcessingService = new TelemetryProcessingService(auditLog, zoneService);
         telemetryWorker.submit(this::telemetryLoop);
     }
 
@@ -45,26 +60,27 @@ public class SmartMoveCentralController {
         telemetryWorker.shutdownNow();
     }
 
-    public void registerVehicle(Vehicle v) {
-        if (v == null || v.getId() == null || v.getId().isBlank()) {
-            throw new IllegalArgumentException("Vehicle/id cannot be null");
-        }
-        ReentrantLock lock = lockFor(v.getId());
+    public void registerVehicle(Vehicle vehicle) {
+        validateVehicle(vehicle);
+
+        ReentrantLock lock = lockFor(vehicle.getId());
         lock.lock();
         try {
-            // Ensure initial state
-            if (v.getState() == null) v.setState(VehicleState.AVAILABLE);
+            if (vehicle.getState() == null) {
+                vehicle.setState(VehicleState.AVAILABLE);
+            }
 
-            // Persist + audit (simple commit order; rollback by restoring snapshot)
-            Vehicle snapshot = safeCopy(v);
+            Vehicle snapshot = safeCopy(vehicle);
 
             try {
-                storage.save(v);
-                auditLog.append("VEHICLE_REGISTERED", "vehicleId=" + v.getId() + ", type=" + v.getType());
+                storage.save(vehicle);
+                auditLog.append(
+                        "VEHICLE_REGISTERED",
+                        VEHICLE_ID_PREFIX + vehicle.getId() + ", type=" + vehicle.getType()
+                );
             } catch (Exception ex) {
-                // rollback storage to snapshot
-                try { storage.save(snapshot); } catch (Exception ignored) {}
-                throw new RuntimeException("Failed to register vehicle; rolled back", ex);
+                rollbackToSnapshot(snapshot);
+                throw new SmartMoveOperationException("Failed to register vehicle; rolled back", ex);
             }
         } finally {
             lock.unlock();
@@ -83,30 +99,22 @@ public class SmartMoveCentralController {
         ReentrantLock lock = lockFor(vehicleId);
         lock.lock();
         try {
-            Vehicle v = storage.findById(vehicleId).orElseThrow(() -> new IllegalArgumentException("Vehicle not found"));
-            Vehicle snapshot = safeCopy(v);
+            Vehicle vehicle = getVehicleOrThrow(vehicleId);
+            Vehicle snapshot = safeCopy(vehicle);
 
-            // State machine validation
-            validateTransition(v.getState(), VehicleState.IN_USE);
+            stateValidator.validateTransition(vehicle.getState(), VehicleState.IN_USE);
+            validateMilanMopedHelmetRule(city, vehicle);
 
-            // City-specific rule: Milan helmet check for Mopeds
-            if (city == City.MILAN && v.getType() == VehicleType.MOPED) {
-                boolean helmetPresent = v.getTelemetry() != null && v.getTelemetry().isHelmetPresent();
-                if (!helmetPresent) {
-                    throw new IllegalStateException("Milan rule: Helmet not detected, cannot unlock moped");
-                }
-            }
-
-            v.setCity(city);
-            v.setState(VehicleState.IN_USE);
-            v.setRentalActive(true);
+            vehicle.setCity(city);
+            vehicle.setState(VehicleState.IN_USE);
+            vehicle.setRentalActive(true);
 
             try {
-                storage.save(v);
-                auditLog.append("RENTAL_STARTED", "vehicleId=" + vehicleId + ", city=" + city);
+                storage.save(vehicle);
+                auditLog.append("RENTAL_STARTED", VEHICLE_ID_PREFIX + vehicleId + CITY_PREFIX + city);
             } catch (Exception ex) {
-                try { storage.save(snapshot); } catch (Exception ignored) {}
-                throw new RuntimeException("Failed to start rental; rolled back", ex);
+                rollbackToSnapshot(snapshot);
+                throw new SmartMoveOperationException("Failed to start rental; rolled back", ex);
             }
         } finally {
             lock.unlock();
@@ -117,41 +125,35 @@ public class SmartMoveCentralController {
         ReentrantLock lock = lockFor(vehicleId);
         lock.lock();
         try {
-            Vehicle v = storage.findById(vehicleId).orElseThrow(() -> new IllegalArgumentException("Vehicle not found"));
-            Vehicle snapshot = safeCopy(v);
+            Vehicle vehicle = getVehicleOrThrow(vehicleId);
+            Vehicle snapshot = safeCopy(vehicle);
 
-            if (v.getState() != VehicleState.IN_USE) {
+            if (vehicle.getState() != VehicleState.IN_USE) {
                 throw new IllegalStateException("Vehicle must be IN_USE to end rental");
             }
 
-            // City-specific rule: London congestion charge (hook)
-            double baseFare = 10.0; // simple fixed fare for lab
-            double congestion = (v.getCity() == City.LONDON) ? 5.0 : 0.0;
+            double baseFare = 10.0;
+            double congestion = vehicle.getCity() == City.LONDON ? 5.0 : 0.0;
 
-            Payment p = new Payment(vehicleId, v.getCity(), baseFare, congestion);
-            paymentStorage.save(p);
-            auditLog.append("PAYMENT",
-                    "paymentId=" + p.getId() + ", vehicleId=" + vehicleId + ", city=" + v.getCity()
-                            + ", base=" + baseFare + ", congestion=" + congestion + ", total=" + p.getTotal());
+            savePayment(vehicleId, vehicle, baseFare, congestion);
 
-
-            v.setRentalActive(false);
-            v.setState(VehicleState.AVAILABLE);
+            vehicle.setRentalActive(false);
+            vehicle.setState(VehicleState.AVAILABLE);
 
             try {
-                storage.save(v);
-                auditLog.append("RENTAL_ENDED", "vehicleId=" + vehicleId + ", city=" + v.getCity());
+                storage.save(vehicle);
+                auditLog.append("RENTAL_ENDED", VEHICLE_ID_PREFIX + vehicleId + CITY_PREFIX + vehicle.getCity());
             } catch (Exception ex) {
-                try { storage.save(snapshot); } catch (Exception ignored) {}
-                throw new RuntimeException("Failed to end rental; rolled back", ex);
+                rollbackToSnapshot(snapshot);
+                throw new SmartMoveOperationException("Failed to end rental; rolled back", ex);
             }
         } finally {
             lock.unlock();
         }
     }
 
-    public void sendTelemetry(TelemetryData t) {
-        if (t == null || t.getVehicleId() == null || t.getVehicleId().isBlank()) {
+    public void sendTelemetry(TelemetryData telemetry) {
+        if (telemetry == null || telemetry.getVehicleId() == null || telemetry.getVehicleId().isBlank()) {
             throw new IllegalArgumentException("Telemetry/vehicleId cannot be null");
         }
 
@@ -161,182 +163,132 @@ public class SmartMoveCentralController {
         while (!added) {
             try {
                 // Try to insert into the queue with 1 second timeout
-                added = telemetryQueue.offer(t, 1, TimeUnit.SECONDS);
+                added = telemetryQueue.offer(telemetry, 1, TimeUnit.SECONDS);
 
                 if (!added) {
                     // Queue is temporarily full → log and retry
-                    logger.warning("Telemetry queue full for vehicle: " + t.getVehicleId() + ", retrying...");
-                    auditLog.append("TELEMETRY_RETRY", "vehicleId=" + t.getVehicleId());
+                    logger.warning("Telemetry queue full for vehicle: " + telemetry.getVehicleId() + ", retrying...");
+                    auditLog.append("TELEMETRY_RETRY", VEHICLE_ID_PREFIX + telemetry.getVehicleId());
                 }
             } catch (InterruptedException e) {
                 Thread.currentThread().interrupt();
-                logger.severe("Failed to enqueue telemetry for vehicle: " + t.getVehicleId() + " due to interruption");
-                auditLog.append("TELEMETRY_FAILED", "vehicleId=" + t.getVehicleId());
+                logger.severe("Failed to enqueue telemetry for vehicle: " + telemetry.getVehicleId() + " due to interruption");
+                auditLog.append("TELEMETRY_RETRY", VEHICLE_ID_PREFIX + telemetry.getVehicleId());
                 break; // stop retrying if interrupted
             }
         }
     }
 
-    // ---- Telemetry worker ----
-
     private void telemetryLoop() {
         while (!Thread.currentThread().isInterrupted()) {
             try {
-                TelemetryData t = telemetryQueue.take();
-                handleTelemetry(t);
-            } catch (InterruptedException e) {
+                TelemetryData telemetry = telemetryQueue.take();
+                handleTelemetry(telemetry);
+            } catch (InterruptedException ex) {
                 Thread.currentThread().interrupt();
             } catch (Exception ex) {
-                // keep processing other telemetry
+                // keep processing later telemetry items
             }
         }
     }
 
-    /**
-     * Must be safe against clashes with active rental transactions:
-     * uses per-vehicle primitive lock.
-     */
-    public void handleTelemetry(TelemetryData t) {
-        String vehicleId = t.getVehicleId();
+    public void handleTelemetry(TelemetryData telemetry) {
+        String vehicleId = telemetry.getVehicleId();
         ReentrantLock lock = lockFor(vehicleId);
 
         lock.lock();
         try {
-            Vehicle v = storage.findById(vehicleId).orElse(null);
-            if (v == null) return;
-
-            Vehicle snapshot = safeCopy(v);
-
-            // update telemetry
-            v.setTelemetry(t);
-
-            // Theft alarm: moved without active rental => emergency lock
-            if (t.isMovementDetected() && !v.isRentalActive()) {
-                v.setState(VehicleState.EMERGENCY_LOCK);
-                v.setRentalActive(false);
-                auditLog.append("THEFT_ALARM",
-                        "vehicleId=" + vehicleId + ", movementDetected=true, rentalActive=false");
+            Vehicle vehicle = storage.findById(vehicleId).orElse(null);
+            if (vehicle == null) {
+                return;
             }
 
-            // Telemetry fault => Maintenance (only if not already emergency locked)
-            if (t.isFault() && v.getState() != VehicleState.EMERGENCY_LOCK) {
-                v.setState(VehicleState.MAINTENANCE);
-                v.setRentalActive(false);
-                auditLog.append("FAULT_DETECTED",
-                        "vehicleId=" + vehicleId + ", state->MAINTENANCE");
-            }
-
-            // Required interventions:
-            // 1) Overheat > 60°C => emergency lock
-            // Overheat > 60°C => emergency lock + terminate rental
-            if (t.getTemperatureC() > 60) {
-                v.setRentalActive(false);
-                v.setState(VehicleState.EMERGENCY_LOCK);
-                auditLog.append("OVERHEAT_LOCK",
-                        "vehicleId=" + vehicleId + ", temp=" + t.getTemperatureC());
-            }
-
-
-            // 2) Battery < 5% during trip => maintenance (or emergency terminate)
-            // Battery < 5% during trip => emergency terminate rental + maintenance
-            if (t.getBatteryPercent() < 5 && v.getState() == VehicleState.IN_USE) {
-                v.setRentalActive(false);
-                v.setState(VehicleState.MAINTENANCE);
-                auditLog.append("EMERGENCY_TERMINATION",
-                        "vehicleId=" + vehicleId + ", reason=LOW_BATTERY, batt=" + t.getBatteryPercent());
-            }
-
-
-            // 3) Rome scooter restricted zones
-            if (v.getCity() == City.ROME && v.getType() == VehicleType.E_SCOOTER) {
-                boolean restricted = zoneService.isRestricted(
-                        City.ROME,
-                        v.getType(),
-                        t.getLatitude(),
-                        t.getLongitude()
-                );
-                if (restricted) {
-                    v.setState(VehicleState.EMERGENCY_LOCK);
-                    // optional: audit reason
-                    // auditLog.append("ZONE_VIOLATION", "vehicleId=" + vehicleId);
-                }
-            }
+            Vehicle snapshot = safeCopy(vehicle);
+            telemetryProcessingService.applyTelemetryRules(vehicle, telemetry);
 
             try {
-                storage.save(v);
-                auditLog.append("TELEMETRY", "vehicleId=" + vehicleId + ", batt=" + t.getBatteryPercent() + ", temp=" + t.getTemperatureC());
+                storage.save(vehicle);
+                auditLog.append(
+                        "TELEMETRY",
+                        VEHICLE_ID_PREFIX + vehicleId
+                                + ", batt=" + telemetry.getBatteryPercent()
+                                + ", temp=" + telemetry.getTemperatureC()
+                );
             } catch (Exception ex) {
-                try { storage.save(snapshot); } catch (Exception ignored) {}
-                throw new RuntimeException("Telemetry write failed; rolled back", ex);
+                rollbackToSnapshot(snapshot);
+                throw new SmartMoveOperationException("Telemetry write failed; rolled back", ex);
             }
         } finally {
             lock.unlock();
         }
     }
-
-    // ---- State change helper ----
 
     private void changeState(String vehicleId, VehicleState to, City city, String reason) {
         ReentrantLock lock = lockFor(vehicleId);
         lock.lock();
         try {
-            Vehicle v = storage.findById(vehicleId).orElseThrow(() -> new IllegalArgumentException("Vehicle not found"));
-            Vehicle snapshot = safeCopy(v);
+            Vehicle vehicle = getVehicleOrThrow(vehicleId);
+            Vehicle snapshot = safeCopy(vehicle);
 
-            validateTransition(v.getState(), to);
+            stateValidator.validateTransition(vehicle.getState(), to);
 
-            v.setCity(city);
-            v.setState(to);
+            vehicle.setCity(city);
+            vehicle.setState(to);
 
             try {
-                storage.save(v);
-                auditLog.append("STATE_CHANGE",
-                        "vehicleId=" + vehicleId + ", " + snapshot.getState() + "->" + to + ", reason=" + reason);
+                storage.save(vehicle);
+                auditLog.append(
+                        "STATE_CHANGE",
+                        VEHICLE_ID_PREFIX + vehicleId + ", " + snapshot.getState() + "->" + to + ", reason=" + reason
+                );
             } catch (Exception ex) {
-                try { storage.save(snapshot); } catch (Exception ignored) {}
-                throw new RuntimeException("State change failed; rolled back", ex);
+                rollbackToSnapshot(snapshot);
+                throw new SmartMoveOperationException("State change failed; rolled back", ex);
             }
         } finally {
             lock.unlock();
         }
     }
 
-    private void validateTransition(VehicleState from, VehicleState to) {
-        // Expand these rules to fully match your report
-        if (to == VehicleState.EMERGENCY_LOCK) return; // can always lock
+    private void validateVehicle(Vehicle vehicle) {
+        if (vehicle == null || vehicle.getId() == null || vehicle.getId().isBlank()) {
+            throw new IllegalArgumentException("Vehicle/id cannot be null");
+        }
+    }
 
-        switch (from) {
-            case AVAILABLE -> {
-                if (to != VehicleState.RESERVED && to != VehicleState.RELOCATING) {
-                    throw new IllegalStateException("Invalid transition " + from + " -> " + to);
-                }
+    private Vehicle getVehicleOrThrow(String vehicleId) {
+        return storage.findById(vehicleId)
+                .orElseThrow(() -> new IllegalArgumentException(VEHICLE_NOT_FOUND));
+    }
+
+    private void validateMilanMopedHelmetRule(City city, Vehicle vehicle) {
+        if (city == City.MILAN && vehicle.getType() == VehicleType.MOPED) {
+            boolean helmetPresent = vehicle.getTelemetry() != null && vehicle.getTelemetry().isHelmetPresent();
+            if (!helmetPresent) {
+                throw new IllegalStateException("Milan rule: Helmet not detected, cannot unlock moped");
             }
-            case RESERVED -> {
-                if (to != VehicleState.IN_USE && to != VehicleState.AVAILABLE) {
-                    throw new IllegalStateException("Invalid transition " + from + " -> " + to);
-                }
-            }
-            case IN_USE -> {
-                if (to != VehicleState.AVAILABLE && to != VehicleState.MAINTENANCE && to != VehicleState.EMERGENCY_LOCK) {
-                    throw new IllegalStateException("Invalid transition " + from + " -> " + to);
-                }
-            }
-            case MAINTENANCE -> {
-                if (to != VehicleState.AVAILABLE) {
-                    throw new IllegalStateException("Invalid transition " + from + " -> " + to);
-                }
-            }
-            case RELOCATING -> {
-                if (to != VehicleState.AVAILABLE) {
-                    throw new IllegalStateException("Invalid transition " + from + " -> " + to);
-                }
-            }
-            case EMERGENCY_LOCK -> {
-                if (to != VehicleState.MAINTENANCE) {
-                    throw new IllegalStateException("Invalid transition " + from + " -> " + to);
-                }
-            }
-            default -> throw new IllegalStateException("Unknown state: " + from);
+        }
+    }
+
+    private void savePayment(String vehicleId, Vehicle vehicle, double baseFare, double congestion) {
+        Payment payment = new Payment(vehicleId, vehicle.getCity(), baseFare, congestion);
+        paymentStorage.save(payment);
+        auditLog.append(
+                "PAYMENT",
+                "paymentId=" + payment.getId()
+                        + ", " + VEHICLE_ID_PREFIX + vehicleId
+                        + CITY_PREFIX + vehicle.getCity()
+                        + ", base=" + baseFare
+                        + ", congestion=" + congestion
+                        + ", total=" + payment.getTotal()
+        );
+    }
+
+    private void rollbackToSnapshot(Vehicle snapshot) {
+        try {
+            storage.save(snapshot);
+        } catch (Exception ignored) {
+            // best effort rollback
         }
     }
 
@@ -344,26 +296,7 @@ public class SmartMoveCentralController {
         return vehicleLocks.computeIfAbsent(vehicleId, id -> new ReentrantLock());
     }
 
-    private Vehicle safeCopy(Vehicle v) {
-        // If your Vehicle already has copy(), call it.
-        // Otherwise implement copy() in Vehicle and replace this.
-        return v.copy();
-    }
-    // Add this at the end of the class (before the final closing brace)
-    /**
-     * Package-private setter for telemetryQueue for testing purposes.
-     * Allows injecting a test queue for coverage of retry and failure logic.
-     */
-    void setTelemetryQueue(BlockingQueue<TelemetryData> testQueue) {
-        // NOTE: Only for tests; not meant for production use
-        // Replace the existing telemetryQueue using reflection is avoided for simplicity
-        while (!telemetryQueue.isEmpty()) {
-            telemetryQueue.poll();
-        }
-        testQueue.forEach(telemetryQueue::offer);
-    }
-    // --- Only for testing purposes ---
-    public int getTelemetryQueueSize() {
-        return telemetryQueue.size();
+    private Vehicle safeCopy(Vehicle vehicle) {
+        return vehicle.copy();
     }
 }
