@@ -10,6 +10,8 @@ import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
 
 import java.util.Optional;
+import java.util.concurrent.BlockingQueue;
+import java.util.concurrent.LinkedBlockingQueue;
 
 import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.Mockito.*;
@@ -111,6 +113,7 @@ class SmartMoveCentralControllerTest {
 
         when(vehicleStorage.findById("v5")).thenReturn(Optional.of(v));
 
+        // Correct constructor with all parameters
         TelemetryData t = new TelemetryData("v5", 0.0, 0.0, 50, 20.0);
         t.setMovementDetected(true);
 
@@ -139,5 +142,66 @@ class SmartMoveCentralControllerTest {
 
         assertEquals(VehicleState.EMERGENCY_LOCK, v.getState());
         verify(vehicleStorage).save(v);
+    }
+
+    // --- New test for reliability tactics on sendTelemetry ---
+    @Test
+    void sendTelemetry_queueFull_retriesAndLogs() throws Exception { // throws Exception covers reflection exceptions
+        controller = new SmartMoveCentralController(vehicleStorage, auditLog, zoneService, paymentStorage);
+
+        Vehicle v = new Vehicle("v7", VehicleType.E_SCOOTER, City.LONDON);
+
+        // Mock the queue to trigger retry
+        BlockingQueue<TelemetryData> queue = mock(BlockingQueue.class);
+        when(queue.offer(any(TelemetryData.class), anyLong(), any()))
+                .thenReturn(false)  // first attempt fails
+                .thenReturn(true);  // second attempt succeeds
+
+        // Replace the private telemetryQueue using reflection
+        java.lang.reflect.Field field = SmartMoveCentralController.class.getDeclaredField("telemetryQueue");
+        field.setAccessible(true);
+        field.set(controller, queue);
+
+        TelemetryData t = new TelemetryData("v7", 0.0, 0.0, 50, 20.0);
+
+        controller.sendTelemetry(t);
+
+        verify(queue, atLeast(2)).offer(eq(t), anyLong(), any());
+        verify(auditLog).append(eq("TELEMETRY_RETRY"), contains("vehicleId=v7"));
+    }
+    @Test
+    void sendTelemetry_queueInterrupted_logsAndStops() throws Exception {
+        controller = new SmartMoveCentralController(vehicleStorage, auditLog, zoneService, paymentStorage);
+
+        BlockingQueue<TelemetryData> queue = mock(BlockingQueue.class);
+        when(queue.offer(any(TelemetryData.class), anyLong(), any()))
+                .thenThrow(new InterruptedException());
+
+        java.lang.reflect.Field field = SmartMoveCentralController.class.getDeclaredField("telemetryQueue");
+        field.setAccessible(true);
+        field.set(controller, queue);
+
+        TelemetryData t = new TelemetryData("v8", 0.0, 0.0, 50, 20.0);
+
+        controller.sendTelemetry(t);
+
+        verify(auditLog).append(eq("TELEMETRY_FAILED"), contains("vehicleId=v8"));
+    }
+    @Test
+    void setTelemetryQueue_replacesQueueContents() {
+        controller = new SmartMoveCentralController(vehicleStorage, auditLog, zoneService, paymentStorage);
+
+        // Create a test queue with some telemetry
+        BlockingQueue<TelemetryData> testQueue = new LinkedBlockingQueue<>();
+        TelemetryData t1 = new TelemetryData("test1", 0.0, 0.0, 50, 20.0);
+        TelemetryData t2 = new TelemetryData("test2", 0.0, 0.0, 50, 20.0);
+        testQueue.offer(t1);
+        testQueue.offer(t2);
+
+        // Call the helper method
+        controller.setTelemetryQueue(testQueue);
+
+        // Assert the telemetryQueue has the test items
+        assertEquals(2, controller.getTelemetryQueueSize());
     }
 }

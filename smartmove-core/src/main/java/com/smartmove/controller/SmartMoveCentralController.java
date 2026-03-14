@@ -10,7 +10,7 @@ import com.smartmove.storage.VehicleStorage;
 import com.smartmove.zones.ZoneService;
 import com.smartmove.domain.Payment;
 import com.smartmove.storage.PaymentStorage;
-
+import java.util.logging.Logger;
 
 import java.util.Map;
 import java.util.Optional;
@@ -31,7 +31,7 @@ public class SmartMoveCentralController {
     // Telemetry background processing
     private final BlockingQueue<TelemetryData> telemetryQueue = new LinkedBlockingQueue<>();
     private final ExecutorService telemetryWorker = Executors.newSingleThreadExecutor();
-    
+    private static final Logger logger = Logger.getLogger(SmartMoveCentralController.class.getName());
 
     public SmartMoveCentralController(VehicleStorage storage, AuditLogService auditLog, ZoneService zoneService, PaymentStorage paymentStorage) {
         this.storage = storage;
@@ -154,7 +154,27 @@ public class SmartMoveCentralController {
         if (t == null || t.getVehicleId() == null || t.getVehicleId().isBlank()) {
             throw new IllegalArgumentException("Telemetry/vehicleId cannot be null");
         }
-        telemetryQueue.offer(t);
+
+        boolean added = false;
+
+        // Tactic 1 & 2: Check return value and retry/block until inserted
+        while (!added) {
+            try {
+                // Try to insert into the queue with 1 second timeout
+                added = telemetryQueue.offer(t, 1, TimeUnit.SECONDS);
+
+                if (!added) {
+                    // Queue is temporarily full → log and retry
+                    logger.warning("Telemetry queue full for vehicle: " + t.getVehicleId() + ", retrying...");
+                    auditLog.append("TELEMETRY_RETRY", "vehicleId=" + t.getVehicleId());
+                }
+            } catch (InterruptedException e) {
+                Thread.currentThread().interrupt();
+                logger.severe("Failed to enqueue telemetry for vehicle: " + t.getVehicleId() + " due to interruption");
+                auditLog.append("TELEMETRY_FAILED", "vehicleId=" + t.getVehicleId());
+                break; // stop retrying if interrupted
+            }
+        }
     }
 
     // ---- Telemetry worker ----
@@ -328,5 +348,22 @@ public class SmartMoveCentralController {
         // If your Vehicle already has copy(), call it.
         // Otherwise implement copy() in Vehicle and replace this.
         return v.copy();
+    }
+    // Add this at the end of the class (before the final closing brace)
+    /**
+     * Package-private setter for telemetryQueue for testing purposes.
+     * Allows injecting a test queue for coverage of retry and failure logic.
+     */
+    void setTelemetryQueue(BlockingQueue<TelemetryData> testQueue) {
+        // NOTE: Only for tests; not meant for production use
+        // Replace the existing telemetryQueue using reflection is avoided for simplicity
+        while (!telemetryQueue.isEmpty()) {
+            telemetryQueue.poll();
+        }
+        testQueue.forEach(telemetryQueue::offer);
+    }
+    // --- Only for testing purposes ---
+    public int getTelemetryQueueSize() {
+        return telemetryQueue.size();
     }
 }

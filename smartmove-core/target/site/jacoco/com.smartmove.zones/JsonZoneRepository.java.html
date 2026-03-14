@@ -1,0 +1,38 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="en"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../jacoco-resources/report.css" type="text/css"/><link rel="shortcut icon" href="../jacoco-resources/report.gif" type="image/gif"/><title>JsonZoneRepository.java</title><link rel="stylesheet" href="../jacoco-resources/prettify.css" type="text/css"/><script type="text/javascript" src="../jacoco-resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../jacoco-sessions.html" class="el_session">Sessions</a></span><a href="../index.html" class="el_report">SmartMove Core Engine</a> &gt; <a href="index.source.html" class="el_package">com.smartmove.zones</a> &gt; <span class="el_source">JsonZoneRepository.java</span></div><h1>JsonZoneRepository.java</h1><pre class="source lang-java linenums">package com.smartmove.zones;
+
+import com.fasterxml.jackson.core.type.TypeReference;
+import com.fasterxml.jackson.databind.ObjectMapper;
+import com.smartmove.domain.City;
+
+import java.nio.file.*;
+import java.util.*;
+
+public class JsonZoneRepository implements ZoneRepository {
+    private final Path file;
+<span class="nc" id="L12">    private final ObjectMapper mapper = new ObjectMapper();</span>
+<span class="nc" id="L13">    private Map&lt;String, List&lt;RestrictedZone&gt;&gt; cache = new HashMap&lt;&gt;();</span>
+
+<span class="nc" id="L15">    public JsonZoneRepository(Path file) {</span>
+<span class="nc" id="L16">        this.file = file;</span>
+<span class="nc" id="L17">        load();</span>
+<span class="nc" id="L18">    }</span>
+
+    private void load() {
+        try {
+<span class="nc bnc" id="L22" title="All 2 branches missed.">            if (!Files.exists(file)) {</span>
+<span class="nc" id="L23">                Files.createDirectories(file.getParent());</span>
+<span class="nc" id="L24">                Files.writeString(file, &quot;{}&quot;);</span>
+            }
+<span class="nc" id="L26">            String json = Files.readString(file);</span>
+<span class="nc" id="L27">            cache = mapper.readValue(json, new TypeReference&lt;&gt;() {});</span>
+<span class="nc" id="L28">        } catch (Exception e) {</span>
+<span class="nc" id="L29">            throw new RuntimeException(&quot;Failed to load zones from &quot; + file, e);</span>
+<span class="nc" id="L30">        }</span>
+<span class="nc" id="L31">    }</span>
+
+    @Override
+    public List&lt;RestrictedZone&gt; getZonesForCity(City city) {
+<span class="nc" id="L35">        return cache.getOrDefault(city.name(), List.of());</span>
+    }
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.jacoco.org/jacoco">JaCoCo</a> 0.8.11.202310140853</span></div></body></html>

@@ -1,0 +1,4 @@
+-------------------------------------------------------------------------------
+Test set: com.smartmove.zones.ZoneServiceTest
+-------------------------------------------------------------------------------
+Tests run: 5, Failures: 0, Errors: 0, Skipped: 0, Time elapsed: 1.695 s -- in com.smartmove.zones.ZoneServiceTest
