@@ -1,18 +1,32 @@
 package com.smartmove.controller;
 
+import java.util.Optional;
+
+import org.junit.jupiter.api.AfterEach;
+import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
+import org.junit.jupiter.api.Test;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyDouble;
+import static org.mockito.ArgumentMatchers.contains;
+import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.when;
+
 import com.smartmove.audit.AuditLogService;
-import com.smartmove.domain.*;
+import com.smartmove.domain.City;
+import com.smartmove.domain.Payment;
+import com.smartmove.domain.Vehicle;
+import com.smartmove.domain.VehicleState;
+import com.smartmove.domain.VehicleType;
 import com.smartmove.storage.PaymentStorage;
 import com.smartmove.storage.VehicleStorage;
 import com.smartmove.telemetry.TelemetryData;
 import com.smartmove.zones.ZoneService;
-import org.junit.jupiter.api.AfterEach;
-import org.junit.jupiter.api.Test;
-
-import java.util.Optional;
-
-import static org.junit.jupiter.api.Assertions.*;
-import static org.mockito.Mockito.*;
 
 class SmartMoveCentralControllerTest {
 
@@ -25,11 +39,13 @@ class SmartMoveCentralControllerTest {
 
     @AfterEach
     void tearDown() {
-        if (controller != null) controller.shutdown();
+        if (controller != null) {
+            controller.shutdown();
+        }
     }
 
     @Test
-    void registerVehicle_setsDefaultState_andAudits() {
+    void registerVehicleSetsDefaultStateAndAudits() {
         controller = new SmartMoveCentralController(vehicleStorage, auditLog, zoneService, paymentStorage);
 
         Vehicle v = new Vehicle();
@@ -46,7 +62,7 @@ class SmartMoveCentralControllerTest {
     }
 
     @Test
-    void reserveVehicle_changesState() {
+    void reserveVehicleChangesState() {
         controller = new SmartMoveCentralController(vehicleStorage, auditLog, zoneService, paymentStorage);
 
         Vehicle v = new Vehicle("v2", VehicleType.E_SCOOTER, City.LONDON);
@@ -64,7 +80,7 @@ class SmartMoveCentralControllerTest {
     }
 
     @Test
-    void startRental_success() {
+    void startRentalSuccess() {
         controller = new SmartMoveCentralController(vehicleStorage, auditLog, zoneService, paymentStorage);
 
         Vehicle v = new Vehicle("v3", VehicleType.E_SCOOTER, City.LONDON);
@@ -82,7 +98,7 @@ class SmartMoveCentralControllerTest {
     }
 
     @Test
-    void endRental_createsPayment_andSetsAvailable() {
+    void endRentalCreatesPaymentAndSetsAvailable() {
         controller = new SmartMoveCentralController(vehicleStorage, auditLog, zoneService, paymentStorage);
 
         Vehicle v = new Vehicle("v4", VehicleType.E_SCOOTER, City.LONDON);
@@ -102,7 +118,7 @@ class SmartMoveCentralControllerTest {
     }
 
     @Test
-    void handleTelemetry_theftMovement_triggersEmergencyLock() {
+    void handleTelemetryTheftMovementTriggersEmergencyLock() {
         controller = new SmartMoveCentralController(vehicleStorage, auditLog, zoneService, paymentStorage);
 
         Vehicle v = new Vehicle("v5", VehicleType.E_SCOOTER, City.LONDON);
@@ -122,7 +138,7 @@ class SmartMoveCentralControllerTest {
     }
 
     @Test
-    void handleTelemetry_romeRestrictedZone_locksVehicle() {
+    void handleTelemetryRomeRestrictedZoneLocksVehicle() {
         controller = new SmartMoveCentralController(vehicleStorage, auditLog, zoneService, paymentStorage);
 
         Vehicle v = new Vehicle("v6", VehicleType.E_SCOOTER, City.ROME);
@@ -140,4 +156,158 @@ class SmartMoveCentralControllerTest {
         assertEquals(VehicleState.EMERGENCY_LOCK, v.getState());
         verify(vehicleStorage).save(v);
     }
+
+    @Test
+    void handleTelemetryOverheatTriggersEmergencyLock() {
+        controller = new SmartMoveCentralController(vehicleStorage, auditLog, zoneService, paymentStorage);
+
+        Vehicle v = new Vehicle("v7", VehicleType.E_SCOOTER, City.LONDON);
+        v.setState(VehicleState.IN_USE);
+        v.setRentalActive(true);
+
+        when(vehicleStorage.findById("v7")).thenReturn(Optional.of(v));
+
+        TelemetryData t = new TelemetryData("v7", 0.0, 0.0, 50, 70.0);
+
+        controller.handleTelemetry(t);
+
+        assertEquals(VehicleState.EMERGENCY_LOCK, v.getState());
+    }
+
+    @Test
+    void handleTelemetryLowBatteryTriggersMaintenance() {
+        controller = new SmartMoveCentralController(vehicleStorage, auditLog, zoneService, paymentStorage);
+
+        Vehicle v = new Vehicle("v8", VehicleType.E_SCOOTER, City.LONDON);
+        v.setState(VehicleState.IN_USE);
+        v.setRentalActive(true);
+
+        when(vehicleStorage.findById("v8")).thenReturn(Optional.of(v));
+
+        TelemetryData t = new TelemetryData("v8", 0.0, 0.0, 3, 20.0);
+
+        controller.handleTelemetry(t);
+
+        assertEquals(VehicleState.MAINTENANCE, v.getState());
+    }
+
+    @Test
+    void handleTelemetryFaultSetsMaintenance() {
+        controller = new SmartMoveCentralController(vehicleStorage, auditLog, zoneService, paymentStorage);
+
+        Vehicle v = new Vehicle("v9", VehicleType.E_SCOOTER, City.LONDON);
+        v.setState(VehicleState.AVAILABLE);
+
+        when(vehicleStorage.findById("v9")).thenReturn(Optional.of(v));
+
+        TelemetryData t = new TelemetryData("v9", 0.0, 0.0, 50, 20.0);
+        t.setFault(true);
+
+        controller.handleTelemetry(t);
+
+        assertEquals(VehicleState.MAINTENANCE, v.getState());
+    }
+
+    @Test
+    void startRentalVehicleNotFoundThrowsException() {
+        controller = new SmartMoveCentralController(vehicleStorage, auditLog, zoneService, paymentStorage);
+
+        when(vehicleStorage.findById("missing")).thenReturn(Optional.empty());
+
+        assertThrows(IllegalArgumentException.class,
+                () -> controller.startRental("missing", City.LONDON));
+    }
+
+    @Test
+    void startRentalInvalidStateThrowsException() {
+        controller = new SmartMoveCentralController(vehicleStorage, auditLog, zoneService, paymentStorage);
+
+        Vehicle v = new Vehicle("v10", VehicleType.E_SCOOTER, City.LONDON);
+        v.setState(VehicleState.AVAILABLE); // invalid for startRental
+
+        when(vehicleStorage.findById("v10")).thenReturn(Optional.of(v));
+
+        assertThrows(IllegalStateException.class,
+                () -> controller.startRental("v10", City.LONDON));
+    }
+
+    @Test
+    void endRentalInvalidStateThrows() {
+        controller = new SmartMoveCentralController(vehicleStorage, auditLog, zoneService, paymentStorage);
+
+        Vehicle v = new Vehicle("e1", VehicleType.E_SCOOTER, City.LONDON);
+        v.setState(VehicleState.AVAILABLE);
+
+        when(vehicleStorage.findById("e1")).thenReturn(Optional.of(v));
+
+        assertThrows(IllegalStateException.class,
+                () -> controller.endRental("e1"));
+    }
+
+    @Test
+    void sendTelemetryInvalidInputThrows() {
+        controller = new SmartMoveCentralController(vehicleStorage, auditLog, zoneService, paymentStorage);
+
+        assertThrows(IllegalArgumentException.class,
+                () -> controller.sendTelemetry(null));
+    }
+
+    @Test
+    void handleTelemetryVehicleNotFoundDoesNothing() {
+        controller = new SmartMoveCentralController(vehicleStorage, auditLog, zoneService, paymentStorage);
+
+        when(vehicleStorage.findById("unknown")).thenReturn(Optional.empty());
+
+        TelemetryData t = new TelemetryData("unknown", 0, 0, 50, 20);
+
+        assertDoesNotThrow(() -> controller.handleTelemetry(t));
+    }
+
+    @Test
+    void reserveInvalidTransitionThrows() {
+        controller = new SmartMoveCentralController(vehicleStorage, auditLog, zoneService, paymentStorage);
+
+        Vehicle v = new Vehicle("x1", VehicleType.E_SCOOTER, City.LONDON);
+        v.setState(VehicleState.MAINTENANCE); // invalid for reserve
+
+        when(vehicleStorage.findById("x1")).thenReturn(Optional.of(v));
+
+        assertThrows(IllegalStateException.class,
+                () -> controller.reserveVehicle("x1", City.LONDON));
+    }
+
+    @Test
+    void registerVehicleNullThrows() {
+        controller = new SmartMoveCentralController(vehicleStorage, auditLog, zoneService, paymentStorage);
+
+        assertThrows(IllegalArgumentException.class,
+                () -> controller.registerVehicle(null));
+    }
+
+    @Test
+    void sendTelemetryBlankVehicleIdThrows() {
+        controller = new SmartMoveCentralController(vehicleStorage, auditLog, zoneService, paymentStorage);
+
+        TelemetryData t = new TelemetryData();
+        t.setVehicleId("   ");
+
+        assertThrows(IllegalArgumentException.class,
+                () -> controller.sendTelemetry(t));
+    }
+
+    @Test
+    void getVehicleDelegatesToStorage() {
+        controller = new SmartMoveCentralController(vehicleStorage, auditLog, zoneService, paymentStorage);
+
+        Vehicle v = new Vehicle("g1", VehicleType.E_SCOOTER, City.LONDON);
+        when(vehicleStorage.findById("g1")).thenReturn(Optional.of(v));
+
+        Optional<Vehicle> result = controller.getVehicle("g1");
+
+        assertTrue(result.isPresent());
+        assertEquals("g1", result.get().getId());
+        verify(vehicleStorage).findById("g1");
+    }
+
+    
 }
