@@ -324,4 +324,143 @@ class SmartMoveApiServerTest {
         assertEquals("GET,POST,OPTIONS", headers.getFirst("Access-Control-Allow-Methods"));
         assertEquals("Content-Type", headers.getFirst("Access-Control-Allow-Headers"));
     }
+
+    @Test
+    void testGetVehicleWrongMethodReturns405() throws Exception {
+        HttpExchange ex = mock(HttpExchange.class);
+        SmartMoveCentralController controller = mock(SmartMoveCentralController.class);
+        Headers headers = new Headers();
+        ByteArrayOutputStream os = new ByteArrayOutputStream();
+
+        when(ex.getRequestMethod()).thenReturn("POST");
+        when(ex.getResponseHeaders()).thenReturn(headers);
+        when(ex.getResponseBody()).thenReturn(os);
+
+        SmartMoveApiServer.handleGet(ex, controller);
+
+        verify(ex).sendResponseHeaders(eq(405), anyLong());
+        assertTrue(os.toString().contains("Use GET"));
+    }
+
+    @Test
+    void testReserveOptionsReturns204() throws Exception {
+        HttpExchange ex = mock(HttpExchange.class);
+        Headers headers = new Headers();
+
+        when(ex.getRequestMethod()).thenReturn("OPTIONS");
+        when(ex.getResponseHeaders()).thenReturn(headers);
+
+        SmartMoveApiServer.handleReserve(ex, mock(SmartMoveCentralController.class));
+
+        verify(ex).sendResponseHeaders(eq(204), eq(-1L));
+    }
+
+    @Test
+    void testStartOptionsReturns204() throws Exception {
+        HttpExchange ex = mock(HttpExchange.class);
+        Headers headers = new Headers();
+
+        when(ex.getRequestMethod()).thenReturn("OPTIONS");
+        when(ex.getResponseHeaders()).thenReturn(headers);
+
+        SmartMoveApiServer.handleStart(ex, mock(SmartMoveCentralController.class));
+
+        verify(ex).sendResponseHeaders(eq(204), eq(-1L));
+    }
+
+    @Test
+    void testEndOptionsReturns204() throws Exception {
+        HttpExchange ex = mock(HttpExchange.class);
+        Headers headers = new Headers();
+
+        when(ex.getRequestMethod()).thenReturn("OPTIONS");
+        when(ex.getResponseHeaders()).thenReturn(headers);
+
+        SmartMoveApiServer.handleEnd(ex, mock(SmartMoveCentralController.class));
+
+        verify(ex).sendResponseHeaders(eq(204), eq(-1L));
+    }
+
+    @Test
+    void testTelemetryOptionsReturns204() throws Exception {
+        HttpExchange ex = mock(HttpExchange.class);
+        Headers headers = new Headers();
+
+        when(ex.getRequestMethod()).thenReturn("OPTIONS");
+        when(ex.getResponseHeaders()).thenReturn(headers);
+
+        SmartMoveApiServer.handleTelemetry(ex, mock(SmartMoveCentralController.class));
+
+        verify(ex).sendResponseHeaders(eq(204), eq(-1L));
+    }
+
+    @Test
+    void testHandleGetSetsCorsHeaders() throws Exception {
+        HttpExchange ex = mock(HttpExchange.class);
+        SmartMoveCentralController controller = mock(SmartMoveCentralController.class);
+        Headers headers = new Headers();
+        ByteArrayOutputStream os = new ByteArrayOutputStream();
+
+        when(ex.getRequestMethod()).thenReturn("GET");
+        when(ex.getRequestURI()).thenReturn(new URI("/vehicle?id=v1"));
+        when(ex.getResponseHeaders()).thenReturn(headers);
+        when(ex.getResponseBody()).thenReturn(os);
+        when(controller.getVehicle("v1")).thenReturn(Optional.of(new Vehicle()));
+
+        SmartMoveApiServer.handleGet(ex, controller);
+
+        assertEquals("*", headers.getFirst("Access-Control-Allow-Origin"));
+        assertEquals("GET,POST,OPTIONS", headers.getFirst("Access-Control-Allow-Methods"));
+        assertEquals("Content-Type", headers.getFirst("Access-Control-Allow-Headers"));
+    }
+
+    @Test
+    void testTelemetryParsesFlagsAndReturnsQueued() throws Exception {
+        HttpExchange ex = mock(HttpExchange.class);
+        SmartMoveCentralController controller = mock(SmartMoveCentralController.class);
+        Headers headers = new Headers();
+        ByteArrayOutputStream os = new ByteArrayOutputStream();
+
+        String json = """
+                {
+                  "vehicleId":"veh-1",
+                  "latitude":10.0,
+                  "longitude":20.0,
+                  "batteryPercent":4,
+                  "temperatureC":65.0,
+                  "helmetPresent":true,
+                  "movementDetected":true,
+                  "fault":true
+                }
+                """;
+
+        when(ex.getRequestMethod()).thenReturn("POST");
+        when(ex.getRequestBody()).thenReturn(new ByteArrayInputStream(json.getBytes()));
+        when(ex.getResponseHeaders()).thenReturn(headers);
+        when(ex.getResponseBody()).thenReturn(os);
+
+        SmartMoveApiServer.handleTelemetry(ex, controller);
+
+        verify(controller).sendTelemetry(any(TelemetryData.class));
+        verify(ex).sendResponseHeaders(eq(200), anyLong());
+        assertTrue(os.toString().contains("queued"));
+    }
+
+    @Test
+    void testHandleHealthSetsCorsHeaders() throws Exception {
+        HttpExchange ex = mock(HttpExchange.class);
+        Headers headers = new Headers();
+        ByteArrayOutputStream os = new ByteArrayOutputStream();
+
+        when(ex.getRequestMethod()).thenReturn("GET");
+        when(ex.getResponseHeaders()).thenReturn(headers);
+        when(ex.getResponseBody()).thenReturn(os);
+
+        SmartMoveApiServer.handleHealth(ex);
+
+        assertEquals("*", headers.getFirst("Access-Control-Allow-Origin"));
+        assertEquals("GET,POST,OPTIONS", headers.getFirst("Access-Control-Allow-Methods"));
+        assertEquals("Content-Type", headers.getFirst("Access-Control-Allow-Headers"));
+        assertTrue(os.toString().contains("ok"));
+    }
 }
