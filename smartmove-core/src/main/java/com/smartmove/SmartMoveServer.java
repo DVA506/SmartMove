@@ -9,11 +9,12 @@ import com.smartmove.zones.ZoneRepository;
 import com.smartmove.zones.ZoneService;
 import com.smartmove.storage.JsonPaymentStorage;
 import com.smartmove.storage.PaymentStorage;
-
+import java.util.logging.Logger;
 
 import java.nio.file.Paths;
 
 public class SmartMoveServer {
+    private static final Logger LOGGER = Logger.getLogger(SmartMoveServer.class.getName());
 
     public static void main(String[] args) {
         // Storage (JSON files)
@@ -36,10 +37,10 @@ public class SmartMoveServer {
         // Keep app alive (optional)
         Runtime.getRuntime().addShutdownHook(new Thread(controller::shutdown));
 
-        System.out.println("SmartMove core engine started.");
-        System.out.println("Vehicles persisted at: data/vehicles.json");
-        System.out.println("Zones loaded from: data/restricted-zones.json");
-        System.out.println("Audit log at: data/audit-log.jsonl");
+        LOGGER.info("SmartMove core engine started.");
+        LOGGER.info("Vehicles persisted at: data/vehicles.json");
+        LOGGER.info("Zones loaded from: data/restricted-zones.json");
+        LOGGER.info("Audit log at: data/audit-log.jsonl");
 
         // If you have no HTTP server, you can run a simple simulation here.
     }
