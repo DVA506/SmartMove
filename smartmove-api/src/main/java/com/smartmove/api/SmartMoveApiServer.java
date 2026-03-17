@@ -1,129 +1,55 @@
 package com.smartmove.api;
 
-import com.fasterxml.jackson.databind.ObjectMapper;
-import com.smartmove.audit.AuditLogService;
-import com.smartmove.controller.SmartMoveCentralController;
-import com.smartmove.domain.*;
-import com.smartmove.telemetry.TelemetryData;
-import com.smartmove.storage.JsonVehicleStorage;
-import com.smartmove.storage.VehicleStorage;
-import com.smartmove.zones.JsonZoneRepository;
-import com.smartmove.zones.ZoneRepository;
-import com.smartmove.zones.ZoneService;
-import com.smartmove.storage.JsonPaymentStorage;
-import com.smartmove.storage.PaymentStorage;
-
-import com.sun.net.httpserver.HttpExchange;
-import com.sun.net.httpserver.HttpServer;
-
 import java.io.IOException;
 import java.io.InputStream;
 import java.net.InetSocketAddress;
-import java.nio.charset.StandardCharsets;
 import java.nio.file.Paths;
 import java.util.Map;
+
+import com.fasterxml.jackson.databind.ObjectMapper;
+import com.smartmove.audit.AuditLogService;
+import com.smartmove.controller.SmartMoveCentralController;
+import com.smartmove.domain.City;
+import com.smartmove.domain.Vehicle;
+import com.smartmove.domain.VehicleType;
+import com.smartmove.storage.JsonPaymentStorage;
+import com.smartmove.storage.JsonVehicleStorage;
+import com.smartmove.storage.PaymentStorage;
+import com.smartmove.storage.VehicleStorage;
+import com.smartmove.telemetry.TelemetryData;
+import com.smartmove.zones.JsonZoneRepository;
+import com.smartmove.zones.ZoneRepository;
+import com.smartmove.zones.ZoneService;
+import com.sun.net.httpserver.HttpExchange;
+import com.sun.net.httpserver.HttpServer;
 
 public class SmartMoveApiServer {
 
     private static final ObjectMapper mapper = new ObjectMapper();
 
     public static void main(String[] args) throws Exception {
-        // Wire core engine
         VehicleStorage vehicleStorage = new JsonVehicleStorage(Paths.get("data/vehicles.json"));
         AuditLogService audit = new AuditLogService(Paths.get("data/audit-log.jsonl"));
         ZoneRepository zoneRepo = new JsonZoneRepository(Paths.get("data/restricted-zones.json"));
         PaymentStorage paymentStorage = new JsonPaymentStorage(Paths.get("data/payments.json"));
 
         ZoneService zones = new ZoneService(zoneRepo);
-
-
-        SmartMoveCentralController controller = new SmartMoveCentralController(vehicleStorage, audit, zones, paymentStorage);
+        SmartMoveCentralController controller = new SmartMoveCentralController(vehicleStorage, audit, zones,
+                paymentStorage);
 
         HttpServer server = HttpServer.create(new InetSocketAddress(8080), 0);
 
-        // Register vehicle
-        server.createContext("/vehicles", ex -> {
-            cors(ex);
-            if ("OPTIONS".equals(ex.getRequestMethod())) { ex.sendResponseHeaders(204, -1); return; }
-            if (!"POST".equals(ex.getRequestMethod())) { json(ex, 405, Map.of("error","Use POST")); return; }
-
-            VehicleCreateRequest req = readJson(ex, VehicleCreateRequest.class);
-            Vehicle v = new Vehicle(req.type, req.city);
-            controller.registerVehicle(v);
-            json(ex, 200, Map.of("id", v.getId()));
-        });
-
-        // Get vehicle
-        server.createContext("/vehicle", ex -> {
-            cors(ex);
-            if ("OPTIONS".equals(ex.getRequestMethod())) { ex.sendResponseHeaders(204, -1); return; }
-            if (!"GET".equals(ex.getRequestMethod())) { json(ex, 405, Map.of("error","Use GET")); return; }
-
-            String query = ex.getRequestURI().getQuery(); // id=...
-            String id = (query != null && query.startsWith("id=")) ? query.substring(3) : null;
-            if (id == null || id.isBlank()) { json(ex, 400, Map.of("error","Missing id")); return; }
-
-            var opt = controller.getVehicle(id);
-            if (opt.isEmpty()) { json(ex, 404, Map.of("error","Not found")); return; }
-            json(ex, 200, opt.get());
-        });
-
-        // Reserve
-        server.createContext("/reserve", ex -> {
-            cors(ex);
-            if ("OPTIONS".equals(ex.getRequestMethod())) { ex.sendResponseHeaders(204, -1); return; }
-            if (!"POST".equals(ex.getRequestMethod())) { json(ex, 405, Map.of("error","Use POST")); return; }
-
-            ActionRequest req = readJson(ex, ActionRequest.class);
-            controller.reserveVehicle(req.vehicleId, req.city);
-            json(ex, 200, Map.of("ok", true));
-        });
-
-        // Start rental
-        server.createContext("/start", ex -> {
-            cors(ex);
-            if ("OPTIONS".equals(ex.getRequestMethod())) { ex.sendResponseHeaders(204, -1); return; }
-            if (!"POST".equals(ex.getRequestMethod())) { json(ex, 405, Map.of("error","Use POST")); return; }
-
-            ActionRequest req = readJson(ex, ActionRequest.class);
-            controller.startRental(req.vehicleId, req.city);
-            json(ex, 200, Map.of("ok", true));
-        });
-
-        // End rental
-        server.createContext("/end", ex -> {
-            cors(ex);
-            if ("OPTIONS".equals(ex.getRequestMethod())) { ex.sendResponseHeaders(204, -1); return; }
-            if (!"POST".equals(ex.getRequestMethod())) { json(ex, 405, Map.of("error","Use POST")); return; }
-
-            EndRequest req = readJson(ex, EndRequest.class);
-            controller.endRental(req.vehicleId);
-            json(ex, 200, Map.of("ok", true));
-        });
-
-        // Telemetry
-        server.createContext("/telemetry", ex -> {
-            cors(ex);
-            if ("OPTIONS".equals(ex.getRequestMethod())) { ex.sendResponseHeaders(204, -1); return; }
-            if (!"POST".equals(ex.getRequestMethod())) { json(ex, 405, Map.of("error","Use POST")); return; }
-
-            TelemetryRequest req = readJson(ex, TelemetryRequest.class);
-            TelemetryData t = new TelemetryData(req.vehicleId, req.latitude, req.longitude, req.batteryPercent, req.temperatureC);
-            t.setHelmetPresent(req.helmetPresent);
-            t.setMovementDetected(req.movementDetected);
-            t.setFault(req.fault);
-
-            controller.sendTelemetry(t);
-            json(ex, 200, Map.of("queued", true));
-        });
-        
+        // We now call the static methods below
+        server.createContext("/vehicles", ex -> handleRegister(ex, controller));
+        server.createContext("/vehicle", ex -> handleGet(ex, controller));
+        server.createContext("/reserve", ex -> handleReserve(ex, controller));
+        server.createContext("/start", ex -> handleStart(ex, controller));
+        server.createContext("/end", ex -> handleEnd(ex, controller));
+        server.createContext("/telemetry", ex -> handleTelemetry(ex, controller));
         server.createContext("/health", ex -> {
             cors(ex);
-            if ("OPTIONS".equals(ex.getRequestMethod())) { ex.sendResponseHeaders(204, -1); return; }
             json(ex, 200, Map.of("status", "ok"));
         });
-
-
 
         server.setExecutor(null);
         server.start();
@@ -131,10 +57,131 @@ public class SmartMoveApiServer {
         Runtime.getRuntime().addShutdownHook(new Thread(controller::shutdown));
     }
 
-    // --- DTOs ---
-    public static class VehicleCreateRequest { public VehicleType type; public City city; }
-    public static class ActionRequest { public String vehicleId; public City city; }
-    public static class EndRequest { public String vehicleId; }
+    // --- Endpoints moved to methods for Unit Test Coverage ---
+
+    public static void handleRegister(HttpExchange ex, SmartMoveCentralController controller) throws IOException {
+        cors(ex);
+        if ("OPTIONS".equals(ex.getRequestMethod())) {
+            ex.sendResponseHeaders(204, -1);
+            return;
+        }
+        if (!"POST".equals(ex.getRequestMethod())) {
+            json(ex, 405, Map.of("error", "Use POST"));
+            return;
+        }
+
+        VehicleCreateRequest req = readJson(ex, VehicleCreateRequest.class);
+        Vehicle v = new Vehicle(req.type, req.city);
+        controller.registerVehicle(v);
+        json(ex, 200, Map.of("id", v.getId()));
+    }
+
+    public static void handleGet(HttpExchange ex, SmartMoveCentralController controller) throws IOException {
+        cors(ex);
+        if ("OPTIONS".equals(ex.getRequestMethod())) {
+            ex.sendResponseHeaders(204, -1);
+            return;
+        }
+        if (!"GET".equals(ex.getRequestMethod())) {
+            json(ex, 405, Map.of("error", "Use GET"));
+            return;
+        }
+
+        String query = ex.getRequestURI().getQuery();
+        String id = (query != null && query.startsWith("id=")) ? query.substring(3) : null;
+        if (id == null || id.isBlank()) {
+            json(ex, 400, Map.of("error", "Missing id"));
+            return;
+        }
+
+        var opt = controller.getVehicle(id);
+        if (opt.isEmpty()) {
+            json(ex, 404, Map.of("error", "Not found"));
+            return;
+        }
+        json(ex, 200, opt.get());
+    }
+
+    public static void handleReserve(HttpExchange ex, SmartMoveCentralController controller) throws IOException {
+        cors(ex);
+        if ("OPTIONS".equals(ex.getRequestMethod())) {
+            ex.sendResponseHeaders(204, -1);
+            return;
+        }
+        if (!"POST".equals(ex.getRequestMethod())) {
+            json(ex, 405, Map.of("error", "Use POST"));
+            return;
+        }
+        ActionRequest req = readJson(ex, ActionRequest.class);
+        controller.reserveVehicle(req.vehicleId, req.city);
+        json(ex, 200, Map.of("ok", true));
+    }
+
+    public static void handleStart(HttpExchange ex, SmartMoveCentralController controller) throws IOException {
+        cors(ex);
+        if ("OPTIONS".equals(ex.getRequestMethod())) {
+            ex.sendResponseHeaders(204, -1);
+            return;
+        }
+        if (!"POST".equals(ex.getRequestMethod())) {
+            json(ex, 405, Map.of("error", "Use POST"));
+            return;
+        }
+        ActionRequest req = readJson(ex, ActionRequest.class);
+        controller.startRental(req.vehicleId, req.city);
+        json(ex, 200, Map.of("ok", true));
+    }
+
+    public static void handleEnd(HttpExchange ex, SmartMoveCentralController controller) throws IOException {
+        cors(ex);
+        if ("OPTIONS".equals(ex.getRequestMethod())) {
+            ex.sendResponseHeaders(204, -1);
+            return;
+        }
+        if (!"POST".equals(ex.getRequestMethod())) {
+            json(ex, 405, Map.of("error", "Use POST"));
+            return;
+        }
+        EndRequest req = readJson(ex, EndRequest.class);
+        controller.endRental(req.vehicleId);
+        json(ex, 200, Map.of("ok", true));
+    }
+
+    public static void handleTelemetry(HttpExchange ex, SmartMoveCentralController controller) throws IOException {
+        cors(ex);
+        if ("OPTIONS".equals(ex.getRequestMethod())) {
+            ex.sendResponseHeaders(204, -1);
+            return;
+        }
+        if (!"POST".equals(ex.getRequestMethod())) {
+            json(ex, 405, Map.of("error", "Use POST"));
+            return;
+        }
+        TelemetryRequest req = readJson(ex, TelemetryRequest.class);
+        TelemetryData t = new TelemetryData(req.vehicleId, req.latitude, req.longitude, req.batteryPercent,
+                req.temperatureC);
+        t.setHelmetPresent(req.helmetPresent);
+        t.setMovementDetected(req.movementDetected);
+        t.setFault(req.fault);
+        controller.sendTelemetry(t);
+        json(ex, 200, Map.of("queued", true));
+    }
+
+    // --- DTOs and Helpers ---
+    public static class VehicleCreateRequest {
+        public VehicleType type;
+        public City city;
+    }
+
+    public static class ActionRequest {
+        public String vehicleId;
+        public City city;
+    }
+
+    public static class EndRequest {
+        public String vehicleId;
+    }
+
     public static class TelemetryRequest {
         public String vehicleId;
         public double latitude;
@@ -146,7 +193,6 @@ public class SmartMoveApiServer {
         public boolean fault;
     }
 
-    // --- Helpers ---
     private static <T> T readJson(HttpExchange ex, Class<T> clazz) throws IOException {
         try (InputStream is = ex.getRequestBody()) {
             return mapper.readValue(is, clazz);
@@ -165,5 +211,14 @@ public class SmartMoveApiServer {
         ex.getResponseHeaders().set("Access-Control-Allow-Origin", "*");
         ex.getResponseHeaders().set("Access-Control-Allow-Methods", "GET,POST,OPTIONS");
         ex.getResponseHeaders().set("Access-Control-Allow-Headers", "Content-Type");
+    }
+
+    public static void handleHealth(HttpExchange ex) throws IOException {
+        cors(ex);
+        if ("OPTIONS".equals(ex.getRequestMethod())) {
+            ex.sendResponseHeaders(204, -1);
+            return;
+        }
+        json(ex, 200, Map.of("status", "ok"));
     }
 }
