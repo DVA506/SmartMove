@@ -1,5 +1,12 @@
 package com.smartmove.api;
 
+import java.io.IOException;
+import java.io.InputStream;
+import java.net.InetSocketAddress;
+import java.nio.file.Paths;
+import java.util.Map;
+import java.util.logging.Logger;
+
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.smartmove.audit.AuditLogService;
 import com.smartmove.controller.SmartMoveCentralController;
@@ -16,13 +23,6 @@ import com.smartmove.zones.ZoneRepository;
 import com.smartmove.zones.ZoneService;
 import com.sun.net.httpserver.HttpExchange;
 import com.sun.net.httpserver.HttpServer;
-
-import java.io.IOException;
-import java.io.InputStream;
-import java.net.InetSocketAddress;
-import java.nio.file.Paths;
-import java.util.Map;
-import java.util.logging.Logger;
 
 public class SmartMoveApiServer {
 
@@ -62,16 +62,16 @@ public class SmartMoveApiServer {
     }
 
     private static void registerContexts(HttpServer server, SmartMoveCentralController controller) {
-        server.createContext("/vehicles", ex -> handleCreateVehicle(ex, controller));
-        server.createContext("/vehicle", ex -> handleGetVehicle(ex, controller));
+        server.createContext("/vehicles", ex -> handleRegister(ex, controller));
+        server.createContext("/vehicle", ex -> handleGet(ex, controller));
         server.createContext("/reserve", ex -> handleReserve(ex, controller));
-        server.createContext("/start", ex -> handleStartRental(ex, controller));
-        server.createContext("/end", ex -> handleEndRental(ex, controller));
+        server.createContext("/start", ex -> handleStart(ex, controller));
+        server.createContext("/end", ex -> handleEnd(ex, controller));
         server.createContext("/telemetry", ex -> handleTelemetry(ex, controller));
         server.createContext("/health", SmartMoveApiServer::handleHealth);
     }
 
-    private static void handleCreateVehicle(HttpExchange ex, SmartMoveCentralController controller) throws IOException {
+    static void handleRegister(HttpExchange ex, SmartMoveCentralController controller) throws IOException {
         cors(ex);
         if (isOptions(ex)) {
             sendNoContent(ex);
@@ -88,7 +88,7 @@ public class SmartMoveApiServer {
         json(ex, 200, Map.of("id", vehicle.getId()));
     }
 
-    private static void handleGetVehicle(HttpExchange ex, SmartMoveCentralController controller) throws IOException {
+    static void handleGet(HttpExchange ex, SmartMoveCentralController controller) throws IOException {
         cors(ex);
         if (isOptions(ex)) {
             sendNoContent(ex);
@@ -114,7 +114,7 @@ public class SmartMoveApiServer {
         json(ex, 200, vehicle.get());
     }
 
-    private static void handleReserve(HttpExchange ex, SmartMoveCentralController controller) throws IOException {
+    static void handleReserve(HttpExchange ex, SmartMoveCentralController controller) throws IOException {
         cors(ex);
         if (isOptions(ex)) {
             sendNoContent(ex);
@@ -130,7 +130,7 @@ public class SmartMoveApiServer {
         json(ex, 200, Map.of("ok", true));
     }
 
-    private static void handleStartRental(HttpExchange ex, SmartMoveCentralController controller) throws IOException {
+    static void handleStart(HttpExchange ex, SmartMoveCentralController controller) throws IOException {
         cors(ex);
         if (isOptions(ex)) {
             sendNoContent(ex);
@@ -146,7 +146,7 @@ public class SmartMoveApiServer {
         json(ex, 200, Map.of("ok", true));
     }
 
-    private static void handleEndRental(HttpExchange ex, SmartMoveCentralController controller) throws IOException {
+    static void handleEnd(HttpExchange ex, SmartMoveCentralController controller) throws IOException {
         cors(ex);
         if (isOptions(ex)) {
             sendNoContent(ex);
@@ -162,7 +162,7 @@ public class SmartMoveApiServer {
         json(ex, 200, Map.of("ok", true));
     }
 
-    private static void handleTelemetry(HttpExchange ex, SmartMoveCentralController controller) throws IOException {
+    static void handleTelemetry(HttpExchange ex, SmartMoveCentralController controller) throws IOException {
         cors(ex);
         if (isOptions(ex)) {
             sendNoContent(ex);
@@ -179,8 +179,7 @@ public class SmartMoveApiServer {
                 req.getLatitude(),
                 req.getLongitude(),
                 req.getBatteryPercent(),
-                req.getTemperatureC()
-        );
+                req.getTemperatureC());
         telemetry.setHelmetPresent(req.isHelmetPresent());
         telemetry.setMovementDetected(req.isMovementDetected());
         telemetry.setFault(req.isFault());
@@ -189,7 +188,7 @@ public class SmartMoveApiServer {
         json(ex, 200, Map.of("queued", true));
     }
 
-    private static void handleHealth(HttpExchange ex) throws IOException {
+    static void handleHealth(HttpExchange ex) throws IOException {
         cors(ex);
         if (isOptions(ex)) {
             sendNoContent(ex);

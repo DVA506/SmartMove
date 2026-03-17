@@ -1,26 +1,35 @@
 package com.smartmove.controller;
 
-import com.smartmove.audit.AuditLogService;
-import com.smartmove.domain.*;
-import com.smartmove.storage.PaymentStorage;
-import com.smartmove.storage.VehicleStorage;
-import com.smartmove.telemetry.TelemetryData;
-import com.smartmove.zones.ZoneService;
-import org.junit.jupiter.api.AfterEach;
-import org.junit.jupiter.api.Test;
-
 import java.util.Optional;
 import java.util.concurrent.BlockingQueue;
-import java.util.concurrent.LinkedBlockingQueue;
 import java.util.concurrent.TimeUnit;
 
-import static org.junit.jupiter.api.Assertions.*;
+import org.junit.jupiter.api.AfterEach;
+import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertTrue;
+import org.junit.jupiter.api.Test;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyDouble;
 import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.contains;
 import static org.mockito.ArgumentMatchers.eq;
-import static org.mockito.Mockito.*;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.times;
+import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.when;
+
+import com.smartmove.audit.AuditLogService;
+import com.smartmove.domain.City;
+import com.smartmove.domain.Payment;
+import com.smartmove.domain.Vehicle;
+import com.smartmove.domain.VehicleState;
+import com.smartmove.domain.VehicleType;
+import com.smartmove.storage.PaymentStorage;
+import com.smartmove.storage.VehicleStorage;
+import com.smartmove.telemetry.TelemetryData;
+import com.smartmove.zones.ZoneService;
 
 class SmartMoveCentralControllerTest {
 
@@ -33,11 +42,13 @@ class SmartMoveCentralControllerTest {
 
     @AfterEach
     void tearDown() {
-        if (controller != null) controller.shutdown();
+        if (controller != null) {
+            controller.shutdown();
+        }
     }
 
     @Test
-    void registerVehicle_setsDefaultState_andAudits() {
+    void registerVehicleSetsDefaultStateAndAudits() {
         controller = new SmartMoveCentralController(vehicleStorage, auditLog, zoneService, paymentStorage);
 
         Vehicle v = new Vehicle();
@@ -54,7 +65,7 @@ class SmartMoveCentralControllerTest {
     }
 
     @Test
-    void reserveVehicle_changesState() {
+    void reserveVehicleChangesState() {
         controller = new SmartMoveCentralController(vehicleStorage, auditLog, zoneService, paymentStorage);
 
         Vehicle v = new Vehicle("v2", VehicleType.E_SCOOTER, City.LONDON);
@@ -72,7 +83,7 @@ class SmartMoveCentralControllerTest {
     }
 
     @Test
-    void startRental_success() {
+    void startRentalSuccess() {
         controller = new SmartMoveCentralController(vehicleStorage, auditLog, zoneService, paymentStorage);
 
         Vehicle v = new Vehicle("v3", VehicleType.E_SCOOTER, City.LONDON);
@@ -90,7 +101,7 @@ class SmartMoveCentralControllerTest {
     }
 
     @Test
-    void endRental_createsPayment_andSetsAvailable() {
+    void endRentalCreatesPaymentAndSetsAvailable() {
         controller = new SmartMoveCentralController(vehicleStorage, auditLog, zoneService, paymentStorage);
 
         Vehicle v = new Vehicle("v4", VehicleType.E_SCOOTER, City.LONDON);
@@ -110,7 +121,7 @@ class SmartMoveCentralControllerTest {
     }
 
     @Test
-    void handleTelemetry_theftMovement_triggersEmergencyLock() {
+    void handleTelemetryTheftMovementTriggersEmergencyLock() {
         controller = new SmartMoveCentralController(vehicleStorage, auditLog, zoneService, paymentStorage);
 
         Vehicle v = new Vehicle("v5", VehicleType.E_SCOOTER, City.LONDON);
@@ -131,7 +142,7 @@ class SmartMoveCentralControllerTest {
     }
 
     @Test
-    void handleTelemetry_romeRestrictedZone_locksVehicle() {
+    void handleTelemetryRomeRestrictedZoneLocksVehicle() {
         controller = new SmartMoveCentralController(vehicleStorage, auditLog, zoneService, paymentStorage);
 
         Vehicle v = new Vehicle("v6", VehicleType.E_SCOOTER, City.ROME);
@@ -157,9 +168,9 @@ class SmartMoveCentralControllerTest {
 
         BlockingQueue<TelemetryData> queue = mock(BlockingQueue.class);
         when(queue.offer(any(TelemetryData.class), anyLong(), any(TimeUnit.class)))
-                .thenReturn(false)   // first attempt fails
-                .thenReturn(false)   // second attempt fails
-                .thenReturn(true);   // third attempt succeeds
+                .thenReturn(false) // first attempt fails
+                .thenReturn(false) // second attempt fails
+                .thenReturn(true); // third attempt succeeds
 
         java.lang.reflect.Field field = SmartMoveCentralController.class.getDeclaredField("telemetryQueue");
         field.setAccessible(true);
@@ -172,6 +183,7 @@ class SmartMoveCentralControllerTest {
         verify(queue, times(3)).offer(eq(t), eq(1L), eq(TimeUnit.SECONDS));
         verify(auditLog, times(2)).append(eq("TELEMETRY_RETRY"), contains("vehicleId=v7"));
     }
+
     @Test
     void sendTelemetry_queueInterrupted_logsAndStops() throws Exception {
         controller = new SmartMoveCentralController(vehicleStorage, auditLog, zoneService, paymentStorage);
@@ -196,6 +208,7 @@ class SmartMoveCentralControllerTest {
         // Clear interrupt flag so it does not affect other tests
         Thread.interrupted();
     }
+
     @Test
     void sendTelemetry_acceptsValidTelemetry() {
         controller = new SmartMoveCentralController(vehicleStorage, auditLog, zoneService, paymentStorage);
